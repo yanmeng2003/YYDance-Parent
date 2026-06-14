@@ -730,17 +730,57 @@
     }
 
     .lesson-record-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 14px 0;
+      padding: 12px 0;
       border-bottom: 0.5px solid var(--border);
       font-size: 0.9375rem;
     }
 
     .lesson-record-item:last-child {
       border-bottom: none;
+    }
+
+    .lesson-record-content {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .lesson-record-meta-line {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .lesson-record-date {
+      color: var(--text-muted);
+      font-size: 0.8125rem;
+    }
+
+    .lesson-record-status {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 6px;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      line-height: 1.35;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+
+    .lesson-record-status--attend {
+      color: var(--primary-dark);
+      background: var(--primary-light);
+    }
+
+    .lesson-record-status--leave {
+      color: #e67e22;
+      background: rgba(230, 126, 34, 0.12);
+    }
+
+    .lesson-record-status--makeup {
+      color: #1a5276;
+      background: rgba(52, 152, 219, 0.12);
     }
 
     .lesson-records-empty {
@@ -1094,6 +1134,7 @@
 
     const DEFAULT_COURSE_COLOR = { bg: '#f4f2f6', border: '#a89bb0', text: '#4a3f52' };
     const COURSE_STATUSES = ['待开课', '开课中', '已结课'];
+    const LESSON_RECORD_STATUSES = ['上课', '请假', '补课'];
 
     let supabaseClient = null;
     let coursesViewTab = 'week';
@@ -1208,7 +1249,7 @@
     }
 
     function mapStudentCourseEnrollment(row) {
-      const course = row.courses;
+      const course = getEmbeddedRow(row.courses);
       return {
         enrollmentId: row.id,
         courseId: row.course_id,
@@ -1263,28 +1304,98 @@
       return courses;
     }
 
-    function mapLessonRecord(row) {
-      const course = row.courses;
-      return {
-        id: row.id,
-        consumedAt: row.consumed_at,
-        courseType: course ? (course.course_type || '') : '',
-        courseName: course ? (course.name || '') : ''
-      };
+    function getEmbeddedRow(value) {
+      if (!value) return null;
+      return Array.isArray(value) ? value[0] : value;
     }
 
-    async function fetchLessonRecords(studentId) {
+    function normalizeLessonRecordStatus(status) {
+      const value = String(status || '').trim();
+      return LESSON_RECORD_STATUSES.includes(value) ? value : '上课';
+    }
+
+    function lessonRecordStatusBadgeHtml(status) {
+      const value = normalizeLessonRecordStatus(status);
+      const classMap = { '上课': 'attend', '请假': 'leave', '补课': 'makeup' };
+      return `<span class="lesson-record-status lesson-record-status--${classMap[value]}">${escapeHtml(value)}</span>`;
+    }
+
+    function renderStudentCourseNameHtml(course, suffixHtml) {
+      return `<span class="student-course-name">${escapeHtml(formatEnrollmentLabel(course))}${courseSeasonBadgeHtml(course.classSize, course.season)}${suffixHtml || ''}</span>`;
+    }
+
+    function renderParentLessonRecordItemHtml(record) {
+      const status = normalizeLessonRecordStatus(record.status);
+
+      return `
+        <li class="lesson-record-item">
+          <div class="lesson-record-content">
+            ${renderStudentCourseNameHtml({
+              courseType: record.courseType || '摩登舞',
+              name: record.courseName || '—',
+              classSize: record.classSize,
+              season: record.season
+            })}
+            <div class="lesson-record-meta-line">
+              <span class="lesson-record-date">${escapeHtml(formatConsumedAt(record.consumedAt))}</span>
+              ${lessonRecordStatusBadgeHtml(status)}
+            </div>
+          </div>
+        </li>
+      `;
+    }
+
+    async function fetchLessonRecords(studentId, enrollments) {
       const db = getSupabase();
       if (!db) throw new Error('Supabase 库未加载');
 
       const { data, error } = await db
         .from('lesson_records')
-        .select('id, consumed_at, courses(course_type, name)')
+        .select('id, course_id, consumed_at, status')
         .eq('student_id', studentId)
         .order('consumed_at', { ascending: false });
 
       if (error) throw error;
-      return (data || []).map(mapLessonRecord);
+
+      const courseInfoById = new Map((enrollments || []).map(item => [item.courseId, item]));
+      const missingCourseIds = [...new Set(
+        (data || [])
+          .map(row => row.course_id)
+          .filter(courseId => courseId && !courseInfoById.has(courseId))
+      )];
+
+      if (missingCourseIds.length) {
+        const { data: courseRows, error: courseError } = await db
+          .from('courses')
+          .select('id, course_type, name, class_size, season')
+          .in('id', missingCourseIds);
+
+        if (!courseError) {
+          (courseRows || []).forEach(row => {
+            courseInfoById.set(row.id, {
+              courseId: row.id,
+              courseType: row.course_type || '摩登舞',
+              name: row.name || '—',
+              classSize: row.class_size || '大课',
+              season: row.season || ''
+            });
+          });
+        }
+      }
+
+      return (data || []).map(row => {
+        const course = courseInfoById.get(row.course_id) || {};
+        return {
+          id: row.id,
+          courseId: row.course_id || null,
+          consumedAt: row.consumed_at,
+          status: normalizeLessonRecordStatus(row.status),
+          courseType: course.courseType || '摩登舞',
+          courseName: course.name || '—',
+          classSize: course.classSize || '大课',
+          season: String(course.season || '').trim()
+        };
+      });
     }
 
     function formatTime(timeStr) {
@@ -1352,14 +1463,6 @@
       const m = String(d.getUTCMonth() + 1).padStart(2, '0');
       const day = String(d.getUTCDate()).padStart(2, '0');
       return y + '-' + m + '-' + day;
-    }
-
-    function formatParentLessonRecord(record) {
-      const date = formatConsumedAt(record.consumedAt);
-      const type = (record.courseType || '').trim();
-      const name = (record.courseName || '').trim();
-      const courseLabel = type && name ? type + '·' + name : (name || type || '—');
-      return date + ' ' + courseLabel;
     }
 
     function timeToMinutes(timeStr) {
@@ -1605,17 +1708,15 @@
         ? '<div class="detail-section-empty">暂未加入任何课程</div>'
         : '<ul class="detail-section-list">' + courses.map(c => `
             <li class="student-course-item">
-              <span class="student-course-name">${escapeHtml(formatEnrollmentLabel(c))}${courseSeasonBadgeHtml(c.classSize, c.season)}<span class="student-course-hours">剩余 ${c.remainingLessons} 课时</span></span>
+              ${renderStudentCourseNameHtml(c, `<span class="student-course-hours">剩余 ${c.remainingLessons} 课时</span>`)}
             </li>
           `).join('') + '</ul>';
 
-      const recordsHtml = records.length === 0
+      const recordsHtml = !records || records.length === 0
         ? '<div class="lesson-records-empty">暂无上课记录</div>'
-        : '<ul class="lesson-records-list">' + records.map(r => `
-            <li class="lesson-record-item">
-              <span>${escapeHtml(formatParentLessonRecord(r))}</span>
-            </li>
-          `).join('') + '</ul>';
+        : '<ul class="lesson-records-list">' + records.map(r =>
+            renderParentLessonRecordItemHtml(r)
+          ).join('') + '</ul>';
 
       body.innerHTML = `
         <div class="student-detail-info">
@@ -1639,10 +1740,8 @@
       body.innerHTML = '<p class="student-info-loading">加载中...</p>';
 
       try {
-        const [courses, records] = await Promise.all([
-          fetchStudentCourses(currentStudent.id),
-          fetchLessonRecords(currentStudent.id)
-        ]);
+        const courses = await fetchStudentCourses(currentStudent.id);
+        const records = await fetchLessonRecords(currentStudent.id, courses);
         renderStudentInfoUI(currentStudent, courses, records);
       } catch (err) {
         console.error(err);
