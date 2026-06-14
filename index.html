@@ -351,12 +351,13 @@
     }
 
     .student-name {
+      display: inline-flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
       font-weight: 600;
       color: var(--text);
       font-size: 1.0625rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
       letter-spacing: -0.01em;
     }
 
@@ -1330,12 +1331,10 @@
       return `
         <li class="lesson-record-item">
           <div class="lesson-record-content">
-            ${renderStudentCourseNameHtml({
-              courseType: record.courseType || '摩登舞',
-              name: record.courseName || '—',
-              classSize: record.classSize,
-              season: record.season
-            })}
+            <span class="student-course-name">${escapeHtml(formatCourseShortLabel({
+              courseType: record.courseType,
+              courseName: record.courseName
+            }))}${courseSeasonBadgeHtml(record.classSize, record.season)}</span>
             <div class="lesson-record-meta-line">
               <span class="lesson-record-date">${escapeHtml(formatConsumedAt(record.consumedAt))}</span>
               ${lessonRecordStatusBadgeHtml(status)}
@@ -1434,6 +1433,12 @@
       if (isLargeClassCourse(course.classSize) && season) {
         return type + '·' + season + '·' + name;
       }
+      return type + '·' + name;
+    }
+
+    function formatCourseShortLabel(course) {
+      const type = course.courseType || '摩登舞';
+      const name = course.name || course.courseName || '—';
       return type + '·' + name;
     }
 
@@ -1678,7 +1683,7 @@
       listEl.innerHTML = sortedCourses.map(c => `
         <li class="student-list-item">
           <div class="course-meta">
-            <span class="student-name">${escapeHtml(formatCourseListLabel(c))}</span>
+            <span class="student-name">${escapeHtml(formatCourseShortLabel(c))}${courseSeasonBadgeHtml(c.classSize, c.season)}</span>
             <span class="sub">${escapeHtml(formatTimeRange(c.startTime, c.endTime))}</span>
             <span class="sub">上课日期：${escapeHtml(formatCourseListWeekdays(c.weekdays))}</span>
             ${c.teacherName ? `<span class="sub">负责老师：${escapeHtml(c.teacherName)}</span>` : ''}
