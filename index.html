@@ -1322,7 +1322,7 @@
     }
 
     function renderStudentCourseNameHtml(course, suffixHtml) {
-      return `<span class="student-course-name">${escapeHtml(formatEnrollmentLabel(course))}${courseSeasonBadgeHtml(course.classSize, course.season)}${suffixHtml || ''}</span>`;
+      return `<span class="student-course-name">${escapeHtml(formatCourseShortLabel(course))}${courseSeasonBadgeHtml(course.classSize, course.season)}${suffixHtml || ''}</span>`;
     }
 
     function renderParentLessonRecordItemHtml(record) {
