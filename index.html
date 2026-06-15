@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="耀毅国标舞">
@@ -28,6 +28,12 @@
       --tab-bar-height: 64px;
     }
 
+    html {
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+      touch-action: manipulation;
+    }
+
     * {
       box-sizing: border-box;
       margin: 0;
@@ -41,6 +47,7 @@
       min-height: 100vh;
       line-height: 1.47;
       -webkit-font-smoothing: antialiased;
+      touch-action: manipulation;
     }
 
     .navbar {
@@ -48,37 +55,23 @@
       top: 0;
       z-index: 100;
       height: var(--nav-height);
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: var(--glass-blur-strong);
-      -webkit-backdrop-filter: var(--glass-blur-strong);
+      background: #fff;
       color: var(--text);
       display: flex;
       align-items: center;
-      padding: 0 20px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.3);
-      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
-      isolation: isolate;
-    }
-
-    .navbar::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
-      pointer-events: none;
+      gap: 10px;
+      padding: 0 16px 0 14px;
+      border-bottom: 0.5px solid var(--border);
     }
 
     .navbar-brand {
       font-size: 1.0625rem;
-      font-weight: 600;
+      font-weight: 700;
       letter-spacing: -0.01em;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      color: var(--text);
+      color: var(--primary-dark);
       flex: 1;
       min-width: 0;
     }
@@ -433,7 +426,7 @@
 
     .week-schedule {
       --week-pad-y: 10px;
-      --week-grid-height: 728px;
+      --week-grid-height: 672px;
       --week-time-col: 52px;
       --week-day-col-min: 80px;
       width: 100%;
@@ -531,15 +524,16 @@
       position: absolute;
       left: 3px;
       right: 3px;
-      border-radius: 10px;
+      border-radius: 8px;
       padding: 4px 6px;
       font-size: 0.72rem;
       line-height: 1.35;
       overflow: hidden;
-      border-left: 3px solid;
+      border: 1px solid;
       pointer-events: none;
-      box-shadow: var(--shadow);
+      box-shadow: none;
       z-index: 1;
+      box-sizing: border-box;
     }
 
     .week-event-small::after {
@@ -994,10 +988,6 @@
     }
 
     @media (max-width: 640px) {
-      .navbar-brand {
-        font-size: 0.9rem;
-      }
-
       .tab-bar {
         left: 16px;
         right: 16px;
@@ -1114,7 +1104,7 @@
 
     const WEEKDAY_ORDER = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
     const WEEK_GRID_START_MIN = 8 * 60;
-    const WEEK_GRID_END_MIN = 21 * 60;
+    const WEEK_GRID_END_MIN = 20 * 60;
     const WEEK_SLOT_MINUTES = 30;
     const WEEK_SLOT_HEIGHT = 28;
     const WEEK_SLOT_COUNT = (WEEK_GRID_END_MIN - WEEK_GRID_START_MIN) / WEEK_SLOT_MINUTES;
@@ -1497,6 +1487,10 @@
       return DEFAULT_COURSE_COLOR;
     }
 
+    function formatWeekDayHead(day) {
+      return String(day || '').replace(/^周/, '');
+    }
+
     function sortCoursesForList(courses) {
       return [...courses].sort((a, b) => {
         const aLarge = isLargeClassCourse(a.classSize);
@@ -1617,7 +1611,7 @@
 
           events.push(`
             <div class="week-event${smallClass}"
-              style="top:${top}px;height:${height}px;background:${colors.bg};border-left-color:${colors.border};color:${colors.text}"
+              style="top:${top}px;height:${height}px;background:${colors.bg};border-color:${colors.text};color:${colors.text}"
               title="${escapeHtml(typeLabel)} · ${escapeHtml(classLabel)} · ${escapeHtml(teacherLabel)} · ${escapeHtml(timeLabel)}">
               <span class="week-event-type">${escapeHtml(typeLabel)}</span>
               <span class="week-event-class">${escapeHtml(classLabel)}</span>
@@ -1636,7 +1630,7 @@
       }).join('');
 
       const dayHeadsHtml = WEEKDAY_ORDER.map(d =>
-        `<div class="week-day-head">${d}</div>`
+        `<div class="week-day-head">${formatWeekDayHead(d)}</div>`
       ).join('');
 
       container.innerHTML = `
@@ -1927,7 +1921,14 @@
       });
     }
 
+    function preventViewportZoom() {
+      ['gesturestart', 'gesturechange', 'gestureend'].forEach(eventName => {
+        document.addEventListener(eventName, (e) => e.preventDefault(), { passive: false });
+      });
+    }
+
     function initApp() {
+      preventViewportZoom();
       bindEvents();
       initLucideIcons();
       runSplashScreen();
